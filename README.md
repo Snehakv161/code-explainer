@@ -1,4 +1,4 @@
-# AI Code Explainer 💻
+# AI Code Explainer 
 
 An AI-powered code explanation web application built using Python, Streamlit, and Ollama.
 
