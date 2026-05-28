@@ -58,23 +58,8 @@ model_name = st.sidebar.selectbox(
     "Choose AI Model",
     [
         "codellama",
-        "deepseek-coder",
+        "deepseek-coder:latest",
         "mistral"
-    ]
-)
-
-# LANGUAGE SELECTION
-language = st.sidebar.selectbox(
-    "Programming Language",
-    [
-        "Python",
-        "C",
-        "C++",
-        "Java",
-        "JavaScript",
-        "C#",
-        "HTML",
-        "CSS"
     ]
 )
 
@@ -107,7 +92,7 @@ if st.sidebar.button("🗑 Clear Chat"):
 
 st.title("💻 AI Code Explainer")
 
-st.write("Paste code and get instant AI explanation.")
+st.write("Ask coding doubts or paste code for AI explanation.")
 
 # ---------------- SESSION MEMORY ----------------
 
@@ -126,17 +111,11 @@ if clipboard_code:
     st.info("📋 Code detected in clipboard!")
 
     if st.button("Paste Clipboard Code"):
-        st.session_state.clipboard_data = clipboard_code
 
-# ---------------- CODE INPUT ----------------
-
-default_code = st.session_state.get("clipboard_data", "")
-
-code = st.text_area(
-    "Paste your code here",
-    value=default_code,
-    height=300
-)
+        st.session_state.messages.append({
+            "role": "user",
+            "content": clipboard_code
+        })
 
 # ---------------- DISPLAY OLD CHAT ----------------
 
@@ -145,76 +124,81 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
 
         if msg["role"] == "user":
-            st.code(msg["content"], language=language.lower())
+            st.code(msg["content"])
 
         else:
             st.write(msg["content"])
 
-# ---------------- MAIN BUTTON ----------------
+# ---------------- CHAT INPUT ----------------
 
-if st.button("🚀 Explain Code"):
+user_input = st.chat_input("Ask coding doubts or paste code...")
 
-    if code.strip() == "":
-        st.warning("Please paste some code.")
-        st.stop()
+if user_input:
 
-    # USER MESSAGE
     st.session_state.messages.append({
         "role": "user",
-        "content": code
+        "content": user_input
     })
 
     with st.chat_message("user"):
-        st.code(code, language=language.lower())
+        st.code(user_input)
 
-    # AI PROMPT
-    prompt = f"""
-    You are an expert coding teacher.
+# ---------------- AI RESPONSE ----------------
 
-    TASK:
-    {mode}
+if st.session_state.messages:
 
-    PROGRAMMING LANGUAGE:
-    {language}
+    last_message = st.session_state.messages[-1]
 
-    EXPLANATION LEVEL:
-    {level}
+    if last_message["role"] == "user":
 
-    INSTRUCTIONS:
-    - Explain clearly
-    - Use simple English
-    - Explain line by line if needed
-    - Make it beginner friendly
+        with st.chat_message("assistant"):
 
-    CODE:
-    {code}
-    """
+            try:
 
-    # AI RESPONSE
-    with st.chat_message("assistant"):
+                stream = ollama.chat(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"""
+You are an expert AI coding assistant.
 
-        stream = ollama.chat(
-            model=model_name,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            stream=True
-        )
+MODE:
+{mode}
 
-        response = st.write_stream(
-            chunk["message"]["content"]
-            for chunk in stream
-        )
+EXPLANATION LEVEL:
+{level}
 
-    st.session_state.response = response
+YOUR TASKS:
+1. Detect programming language automatically.
+2. Explain code clearly.
+3. Detect errors if present.
+4. Suggest improvements.
+5. Suggest optimization if possible.
+6. Continue conversation naturally.
+7. Help beginners understand coding.
+8. Mention syntax errors clearly.
+"""
+                        }
+                    ] + st.session_state.messages,
+                    stream=True
+                )
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": response
-    })
+                response = st.write_stream(
+                    chunk["message"]["content"]
+                    for chunk in stream
+                )
+
+                st.session_state.response = response
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response
+                })
+
+            except Exception as e:
+
+                st.error(f"Error: {e}")
 
 # ---------------- COPY BUTTON ----------------
 
